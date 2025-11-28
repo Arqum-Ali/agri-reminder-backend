@@ -4,7 +4,6 @@ Main application entry point.
 from flask import Flask
 from flask_cors import CORS
 from config import DEBUG
-# from db import init_db
 from signup import signup_bp
 from login import login_bp
 from otp import otp_bp, configure_mail
@@ -12,16 +11,19 @@ from wheat_listing import wheat_listing
 from machinery_rentals import machinery_rental
 from pesticide_listing import pesticide_listing
 from chat import chat_bp
-from reminder_views import reminder_bp  # Import the blueprint
-from datetime import datetime  # sirf datetime import rakha
+from reminder_views import reminder_bp
+from datetime import datetime
+import os
 
 def create_app():
     app = Flask(__name__)
     CORS(app, supports_credentials=True)
-    app.secret_key = '123789'
+    app.secret_key = '123789'  # baad mein random bana lena
+
+    # Mail config
     configure_mail(app)
 
-    # Register blueprints
+    # Register all blueprints
     app.register_blueprint(signup_bp, url_prefix='/signup')
     app.register_blueprint(login_bp, url_prefix='/login')
     app.register_blueprint(otp_bp, url_prefix='/otp')
@@ -31,19 +33,31 @@ def create_app():
     app.register_blueprint(chat_bp, url_prefix='/chat')
     app.register_blueprint(reminder_bp, url_prefix='/reminder')
 
-    # ←←← YE FIX HAI – IMPORT ANDAR HI KIYA (CIRCULAR IMPORT KHATAM!)
+    # Reminder trigger route
     @app.route("/trigger-reminder")
     def trigger_reminder():
-        from daily_reminder_job import send_reminders  # ab yahan import kar rahe hain
+        from daily_reminder_job import send_reminders
         send_reminders()
         return f"Reminder triggered successfully at {datetime.now()}!"
 
+    # Health check route (optional lekin acha hai)
+    @app.route("/")
+    def home():
+        return "Agri-Reminder Backend is LIVE on Railway!"
+
     return app
 
+# ────────────────────────────────
+# Yeh part local aur Railway dono ke liye perfect hai
+# ────────────────────────────────
+app = create_app()
+
 if __name__ == '__main__':
-    # Local pe chalega, Railway pe nahi
+    # Sirf local development mein chalega
+    print("Running locally...")
     app.run(host="0.0.0.0", port=5000, debug=DEBUG)
 else:
-    # Railway pe ye chalega
+    # Railway / Render / any production server pe chalega
+    print("Running on Railway with Waitress...")
     from waitress import serve
     serve(app, host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
