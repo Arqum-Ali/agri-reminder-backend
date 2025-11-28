@@ -41,9 +41,9 @@ def create_app():
     return app
 
 if __name__ == '__main__':
-    if init_db():
-        app = create_app()
-        print("Starting application on http://127.0.0.1:5000")
-        app.run(host="0.0.0.0", port=5000, debug=DEBUG)
-    else:
-        print("Failed to initialize database. Application not started.")
+    # Local pe chalega, Railway pe nahi
+    app.run(host="0.0.0.0", port=5000, debug=DEBUG)
+else:
+    # Railway pe ye chalega
+    from waitress import serve
+    serve(app, host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
