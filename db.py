@@ -12,6 +12,7 @@ def get_db_connection():
     try:
         conn = pymysql.connect(
             host=DB_HOST,
+            port=DB_PORT,        # ← ye line add honi chahiye
             user=DB_USER,
             password=DB_PASSWORD,
             database=DB_NAME,
