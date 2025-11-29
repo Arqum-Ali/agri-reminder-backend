@@ -3,28 +3,24 @@ Database connection module.
 """
 import pymysql
 import os
-from config import DB_USER, DB_PASSWORD, DB_HOST, DB_NAME
+import pymysql
+from config import DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME
 
 def get_db_connection():
-    """
-    Database se connect karne ka function – Railway pe crash nahi karega.
-    """
     try:
         conn = pymysql.connect(
             host=DB_HOST,
-            port=DB_PORT,        # ← ye line add honi chahiye
+            port=DB_PORT,           # ← ye line hona zaroori hai
             user=DB_USER,
             password=DB_PASSWORD,
             database=DB_NAME,
             cursorclass=pymysql.cursors.DictCursor
         )
-        print(f"[DB] Connected successfully to database '{DB_NAME}' with DictCursor.")
+        print(f"[DB] Connected to {DB_HOST}:{DB_PORT}")
         return conn
     except Exception as e:
-        print(f"[DB ERROR] Connection failed: {str(e)}")
-        # Railway pe agar fail ho to None return kar – app crash nahi karega
+        print(f"[DB ERROR] {e}")
         return None
-
 def init_db():
     """
     Database initialize karne ka function – sirf local pe use kar.

@@ -3,13 +3,11 @@ Configuration settings for the application.
 """
 import os
 
-# Database Configuration (Railway aur local dono ke liye safe)
-DB_USER = os.environ.get('MYSQLUSER', 'root')
-DB_PASSWORD = os.environ.get('MYSQLPASSWORD', '1234')
-DB_PORT     = int(os.environ.get('MYSQLPORT', 3306))   # ← ye line hona chahiye
-DB_HOST = os.environ.get('MYSQLHOST', 'localhost')
-DB_NAME = os.environ.get('MYSQLDATABASE', 'agrox_fyp')
-
+DB_HOST       = os.environ.get('MYSQLHOST')
+DB_PORT       = int(os.environ.get('MYSQLPORT', 3306))
+DB_USER       = os.environ.get('MYSQLUSER')
+DB_PASSWORD   = os.environ.get('MYSQLPASSWORD')
+DB_NAME       = os.environ.get('MYSQLDATABASE')
 # Application Configuration
 DEBUG = True
 
