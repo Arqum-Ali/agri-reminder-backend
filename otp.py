@@ -1,120 +1,161 @@
-from flask import Blueprint, request, jsonify
-from flask_mail import Mail, Message
 import random
-import string
-import hashlib
-import secrets
-from werkzeug.security import generate_password_hash  # Added for password hashing
-from config import MAIL_SERVER, MAIL_PORT, MAIL_USE_TLS, MAIL_USERNAME, MAIL_PASSWORD
+import os
+import smtplib
+from email.mime.text import MIMEText
+from flask import Blueprint, request, jsonify
+from werkzeug.security import generate_password_hash
 from db import get_db_connection
 
-otp_bp = Blueprint('otp', __name__)
+signup_bp = Blueprint('signup', __name__)
 
-# Secret key for token generation (should be stored securely, e.g., in config)
-SECRET_KEY = "your-secure-secret-key"  # Replace with a strong, unique key
+# ==================== EMAIL FUNCTION (Railway pe 100% chalega) ====================
+def send_email_otp(recipient_email, otp_code):
+    sender_email = os.getenv('MAIL_USERNAME')
+    sender_password = os.getenv('MAIL_PASSWORD')
 
-# Mail setup
-mail = Mail()
+    # Agar Railway pe variables nahi mile to skip kar de (signup fail nahi hoga)
+    if not sender_email or not sender_password:
+        print("MAIL_USERNAME or MAIL_PASSWORD not set – skipping email")
+        return
 
-def configure_mail(app):
-    app.config['MAIL_SERVER'] = MAIL_SERVER
-    app.config['MAIL_PORT'] = MAIL_PORT
-    app.config['MAIL_USE_TLS'] = MAIL_USE_TLS
-    app.config['MAIL_USERNAME'] = MAIL_USERNAME
-    app.config['MAIL_PASSWORD'] = MAIL_PASSWORD
-    mail.init_app(app)
-
-# Function to generate OTP
-def generate_otp():
-    return ''.join(random.choices(string.digits, k=4))
-
-# Function to generate a token based on OTP
-def generate_token(otp):
-    # Create a token by hashing OTP with a secret key
-    token_input = f"{otp}:{SECRET_KEY}"
-    return hashlib.sha256(token_input.encode()).hexdigest()
-
-@otp_bp.route('/send_otp', methods=['POST'])
-def send_otp():
-    data = request.get_json()
-    email = data.get('email')
-    if not email:
-        return jsonify({'error': 'Email is required'}), 400
-    conn = get_db_connection()
-    cursor = conn.cursor()
     try:
-        cursor.execute("SELECT * FROM users WHERE email = %s", (email,))
-        user = cursor.fetchone()
-        if not user:
-            return jsonify({'error': 'Email not registered'}), 400
-        otp = generate_otp()
-        token = generate_token(otp)
-        msg = Message('Your OTP Code', sender=MAIL_USERNAME, recipients=[email])
-        msg.body = f'Your OTP code is: {otp}'
-        mail.send(msg)
-        cursor.execute("UPDATE users SET email_otp = %s, created_at = NOW() WHERE email = %s", (otp, email))
-        conn.commit()
-        return jsonify({'message': 'OTP sent successfully', 'token': token}), 200
-    except Exception as e:
-        return jsonify({'error': f'Database error: {str(e)}'}), 500
-    finally:
-        cursor.close()
-        conn.close()
+        msg = MIMEText(f"""
+Hello!
 
-@otp_bp.route('/verify_otp', methods=['POST'])
-def verify_otp():
-    data = request.get_json()
-    otp = data.get('otp')
-    email = data.get('email')
-    token = data.get('token')
-    if not otp or not email or not token:
-        return jsonify({'error': 'OTP, email, and token are required'}), 400
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    try:
-        cursor.execute("SELECT email_otp, created_at FROM users WHERE email = %s ORDER BY created_at DESC LIMIT 1", (email,))
-        record = cursor.fetchone()
-        if not record:
-            return jsonify({'error': 'No OTP found for this email'}), 400
-        expected_token = generate_token(record['email_otp'])
-        if token != expected_token or otp != record['email_otp']:
-            return jsonify({'error': 'Invalid OTP or token'}), 400
-        cursor.execute("UPDATE users SET created_at = NOW() WHERE email = %s", (email,))
-        conn.commit()
-        return jsonify({'message': 'OTP verified successfully'}), 200
-    except Exception as e:
-        return jsonify({'error': f'Error verifying OTP: {str(e)}'}), 500
-    finally:
-        cursor.close()
-        conn.close()
+Welcome to Agri-Reminder App
 
-@otp_bp.route('/reset_password', methods=['POST'])
-def reset_password():
+Your verification OTP is: {otp_code}
+
+Valid for 10 minutes only.
+Do not share this OTP with anyone.
+
+Thank you!
+Team Agri-Reminder
+        """.strip())
+
+        msg['Subject'] = 'Agri-Reminder – Your OTP Code'
+        msg['From'] = sender_email
+        msg['To'] = recipient_email
+
+        # Port 587 + TLS → Railway pe best kaam karta hai
+        with smtplib.SMTP('smtp.gmail.com', 587, timeout=20) as server:
+            server.starttls()
+            server.login(sender_email, sender_password)
+            server.send_message(msg)
+
+        print(f"OTP email successfully sent to {recipient_email}")
+    except Exception as e:
+        print(f"Email sending failed (but signup continues): {e}")
+        # Email fail ho jaye to bhi user register ho jayega
+        pass
+
+
+# ==================== SIGNUP ROUTE ====================
+@signup_bp.route('', methods=['POST'])
+def signup():
     data = request.get_json()
+    full_name = data.get('full_name')
+    phone = data.get('phone')
     email = data.get('email')
-    new_password = data.get('new_password')
-    if not email or not new_password:
-        return jsonify({'error': 'Email and new password are required'}), 400
-    if len(new_password) < 6:
+    password = data.get('password')
+
+    if not all([full_name, phone, email, password]):
+        return jsonify({'error': 'All fields are required'}), 400
+
+    if len(password) < 6:
         return jsonify({'error': 'Password must be at least 6 characters'}), 400
+
+    email_otp = str(random.randint(1000, 9999))
+
     conn = get_db_connection()
+    if conn is None:
+        return jsonify({'error': 'Database connection failed'}), 500
+
     cursor = conn.cursor()
+
     try:
-        cursor.execute("SELECT email_otp, created_at FROM users WHERE email = %s", (email,))
-        user = cursor.fetchone()
-        if not user:
-            return jsonify({'error': 'Email not registered'}), 400
-        cursor.execute("SELECT COUNT(*) > 0 AS is_recent FROM users WHERE email = %s AND email_otp IS NOT NULL AND created_at > NOW() - INTERVAL 5 MINUTE", (email,))
-        is_recent = cursor.fetchone()['is_recent']
-        if not is_recent:
-            return jsonify({'error': 'OTP verification expired. Please verify OTP again'}), 400
-        # Hash the new password using werkzeug.security
-        hashed_password = generate_password_hash(new_password, method='pbkdf2:sha256')
-        cursor.execute("UPDATE users SET password_hash = %s, email_otp = NULL, created_at = NULL WHERE email = %s", (hashed_password, email))
+        # Check if user already exists
+        cursor.execute("SELECT id FROM users WHERE phone = %s OR email = %s", (phone, email))
+        if cursor.fetchone():
+            return jsonify({'error': 'Phone or email already registered'}), 409
+
+        password_hash = generate_password_hash(password)
+
+        # Insert new user
+        cursor.execute("""
+            INSERT INTO users (full_name, phone, email, password_hash, email_otp, otp_attempts)
+            VALUES (%s, %s, %s, %s, %s, 0)
+        """, (full_name, phone, email, password_hash, email_otp))
+
         conn.commit()
-        return jsonify({'message': 'Password reset successfully'}), 200
+        user_id = cursor.lastrowid
+
+        # Send OTP email (fail hone pe bhi signup pass rahega)
+        send_email_otp(email, email_otp)
+
+        return jsonify({
+            'message': 'User registered successfully! OTP sent to your email.',
+            'user_id': user_id,
+            'debug_otp': email_otp  # sirf testing ke liye – baad mein hata dena
+        }), 201
+
     except Exception as e:
-        return jsonify({'error': f'Database error: {str(e)}'}), 500
+        conn.rollback()
+        return jsonify({'error': f'Registration failed: {str(e)}'}), 500
+
+    finally:
+        cursor.close()
+        conn.close()
+
+
+# ==================== VERIFY OTP ROUTE ====================
+@signup_bp.route('/verifyotp', methods=['POST'])
+def verifyotp():
+    data = request.get_json()
+    otp_code = data.get('otp')
+    user_id = data.get('user_id')
+
+    if not otp_code or not user_id:
+        return jsonify({'error': 'OTP and user_id are required'}), 400
+
+    conn = get_db_connection()
+    if conn is None:
+        return jsonify({'error': 'Database connection failed'}), 500
+
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute("SELECT email_otp, otp_attempts FROM users WHERE id = %s", (user_id,))
+        user = cursor.fetchone()
+
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+
+        stored_otp = user['email_otp']
+        attempts = user['otp_attempts'] or 0
+
+        if str(stored_otp) != str(otp_code):
+            attempts += 1
+            cursor.execute("UPDATE users SET otp_attempts = %s WHERE id = %s", (attempts, user_id))
+            conn.commit()
+
+            if attempts >= 3:
+                cursor.execute("DELETE FROM users WHERE id = %s", (user_id,))
+                conn.commit()
+                return jsonify({'error': 'Too many wrong attempts. Please register again.'}), 400
+
+            return jsonify({'error': 'Invalid OTP', 'attempts_left': 3 - attempts}), 401
+
+        # OTP correct
+        cursor.execute("UPDATE users SET email_otp = NULL, otp_attempts = 0 WHERE id = %s", (user_id,))
+        conn.commit()
+
+        return jsonify({'message': 'OTP verified! Account activated successfully.'}), 200
+
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'error': f'Error: {str(e)}'}), 500
+
     finally:
         cursor.close()
         conn.close()

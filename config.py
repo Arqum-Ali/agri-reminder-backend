@@ -1,27 +1,25 @@
 """
 config.py – FINAL VERSION (Railway + Gmail App Password ke liye perfect)
 """
+
 import os
 
-# ========= DATABASE =========
+# ============= DATABASE (Railway MySQL) =============
 DB_HOST       = os.environ.get('MYSQLHOST')
 DB_PORT       = int(os.environ.get('MYSQLPORT', 3306))
 DB_USER       = os.environ.get('MYSQLUSER')
 DB_PASSWORD   = os.environ.get('MYSQLPASSWORD')
 DB_NAME       = os.environ.get('MYSQLDATABASE')
 
-# ========= EMAIL (Railway ke liye safe tareeka) =========
-MAIL_SERVER       = 'smtp.gmail.com'
-MAIL_PORT         = 587
-MAIL_USE_TLS      = True
-MAIL_USE_SSL      = False
-MAIL_USERNAME     = os.environ.get('MAIL_USERNAME')      # ← ab Railway se lega
-MAIL_PASSWORD     = os.environ.get('MAIL_PASSWORD')      # ← ab Railway se lega (hard-code nahi)
-MAIL_DEFAULT_SENDER = os.environ.get('MAIL_USERNAME')
+# ============= RESEND.COM EMAIL SETTINGS =============
+RESEND_API_KEY = os.environ.get('RESEND_API_KEY')        # Railway pe daal dena
+FROM_EMAIL     = os.environ.get('FROM_EMAIL', 'onboarding@resend.dev')
 
-# Debug ke liye
+# ============= APP SETTINGS =============
 DEBUG = True
+SECRET_KEY = os.environ.get('SECRET_KEY', 'super-secret-key-change-in-production')
 
-# Flask-Mail
-from flask_mail import Mail
-mail = Mail()
+
+
+
+
